@@ -4,7 +4,7 @@ import sys
 import nd2
 import numpy as np
 import subprocess
-from skimage.io import imsave
+import tifffile
 
 # Define paths
 input_dir = '/media/paulacauhy/Elements/20260312_quadcam_MEC_horizontal/'
@@ -13,9 +13,9 @@ output_dir = '/media/paulacauhy/Elements/1503_MEC_horizo_TBR1_RELN_CALB_T231/'
 # Channel indices
 channel_names = {
     'dapi': 0,
-    'tbr1': 5,
+    'calbindin': 5,
     'reelin': 10,
-    'calbindin': 15,
+    'tbr1': 15,
     't231': 19
 }
 
@@ -42,6 +42,8 @@ def process_file(input_path, raw_tiles_dir):
             return
 
         image = nd2_file.to_dask()
+        vs = nd2_file.voxel_size()
+        print(f"Voxel size (µm): x={vs.x}, y={vs.y}, z={vs.z}", flush=True)
 
         for tile_index in range(n_tiles):
             for channel_name, channel_index in channel_names.items():
@@ -60,9 +62,17 @@ def process_file(input_path, raw_tiles_dir):
                 del z_slices
                 gc.collect()
 
-                output_filename = f"{channel_name}_tile{tile_index}.tif"
-                output_path = os.path.join(raw_tiles_dir, output_filename)
-                imsave(output_path, tile_np)
+                channel_dir = os.path.join(raw_tiles_dir, channel_name)
+                os.makedirs(channel_dir, exist_ok=True)
+                output_path = os.path.join(channel_dir, f"tile{tile_index}.tif")
+
+                tifffile.imwrite(
+                    output_path,
+                    tile_np,
+                    imagej=True,
+                    resolution=(1 / vs.x, 1 / vs.y),
+                    metadata={'axes': 'ZYX', 'spacing': vs.z, 'unit': 'um'},
+                )
                 print(f"Saved {output_path}", flush=True)
 
                 del tile_np
